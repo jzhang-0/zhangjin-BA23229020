@@ -43,5 +43,4 @@
 #' @import Rcpp
 #' @import microbenchmark
 #' @useDynLib BA23229020
-#' @export
 NULL
