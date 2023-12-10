@@ -18,7 +18,7 @@ Imports:
   microbenchmark,
   stats4,
   Rcpp
-Linkingto: Rcpp
+LinkingTo: Rcpp
 RoxygenNote: 7.2.3
 URL: https://github.com/jzhang-0/zhangjin-BA23229020
 BugReports: https://github.com/jzhang-0/zhangjin-BA23229020/issues
