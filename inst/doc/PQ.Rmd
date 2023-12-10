@@ -1,0 +1,199 @@
+---
+title: "R for Production Quantization"
+author: "Jin Zhang"
+date: "2023-12-9"
+output: rmarkdown::html_vignette
+header-includes:
+  - "\\usepackage[UTF8]{ctex}"
+vignette: >
+  %\VignetteIndexEntry{R for Production Quantization}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Introduction
+
+This vignette demonstrates how to use the `pqCompress` and `pqSearch` functions from the `BA23229020` package. These functions are used for compressing high-dimensional data using product quantization and searching in the compressed data space.
+
+## Installation
+
+You can install the released version of `BA23229020` from [github](https://github.com/jzhang-0/zhangjin-BA23229020) with `devtools::install_github("jzhang-0/zhangjin-BA23229020")`
+
+## Example
+
+### Loading the package
+
+Load the `BA23229020` package:
+
+```{r}
+library(BA23229020)
+```
+
+### Preparing the Data
+
+For this example, we will generate a synthetic dataset:
+
+```{r}
+set.seed(123)
+d <- 64
+data <- matrix(rnorm(1000 * d), ncol = d)
+```
+
+### Compressing the Data
+
+Now, we use `pqCompress` to compress the dataset:
+
+```{r}
+num_subspaces <- 8
+num_clusters <- 256
+compressed <- pqCompress(data, num_subspaces, num_clusters)
+```
+
+Each row represents a 128-dimensional vector. After compression, these vectors are represented as a sequence of indices, each corresponding to the nearest centroid in its respective subspace.
+
+Here are the first few compressed vectors:
+
+```{r}
+head(compressed$compressed_data)
+```
+
+Each row now represents the same original vector but compressed into a sequence of indices. These indices correspond to the particular centroids in each subspace that are closest to the original vector.
+
+### Reconstructing the Vectors
+
+Although the compressed representation is useful for efficient storage and search, it is also valuable to be able to reconstruct the original vectors from their compressed form. This can be done by mapping each index back to its corresponding centroid.
+
+Here is how we can approximately reconstruct the original vectors from the compressed data:
+
+```{r}
+# Initialize the matrix for reconstructed data
+reconstructed_data <- matrix(0, nrow = nrow(compressed$compressed_data), ncol = d)
+
+# Reconstruct the original data for each subspace
+for (i in 1:num_subspaces) {
+  # Get the compressed indices for the current subspace
+  subspace_indices <- compressed$compressed_data[, i]
+  # Create a matrix of centroids for the current subspace
+  subspace_centroids <- matrix(unlist(compressed$centroids[[i]]), byrow = FALSE, ncol = d / num_subspaces)
+  # Ensure that the indices are within the bounds of the centroids matrix
+  if (max(subspace_indices) > nrow(subspace_centroids)) {
+    stop("One of the indices is out of bounds of the centroids matrix.")
+  }
+  # Add the centroids of each subspace to the corresponding position in the reconstructed data matrix
+  for (j in 1:nrow(compressed$compressed_data)) {
+    reconstructed_data[j, ((i - 1) * (d / num_subspaces) + 1):(i * (d / num_subspaces))] <-
+      subspace_centroids[subspace_indices[j], ]
+  }
+}
+```
+
+Each row of `reconstructed_data` is an approximate reconstruction of the original high-dimensional vectors.
+
+The quality of compression can be assessed by measuring the distortion or error introduced during the compression process. A common measure is the Mean Squared Error (MSE) between the original and reconstructed vectors:
+
+```{r}
+mse <- sum((data - reconstructed_data)^2) / sum((data)^2)
+
+print(paste("Relative Mean Squared Error:", mse))
+```
+
+A lower MSE indicates better preservation of the original data through the compression process.
+
+
+### Searching in Compressed Data
+
+We will create 100 random query vectors and use `pqSearchCpp` to find their nearest neighbors in the compressed data:
+
+```{r}
+set.seed(123)
+queries <- matrix(rnorm(100 * d), ncol = d)
+
+nearest_neighbors_list <- lapply(1:100, function(i) pqSearchCpp(queries[i, ], compressed$compressed_data, compressed$centroids))
+```
+
+### Calculating Recall
+Certainly, here's a concise mathematical description and explanation for Recall@k based on the top-1 ground truth:
+
+
+**Recall@k (Top-1 Ground Truth)**:
+
+\[ \text{Recall@k} = 
+   \begin{cases} 
+   1 & \text{if top-1 true relevant item is within top k retrieved items} \\
+   0 & \text{otherwise}
+   \end{cases}
+\]
+
+Where:
+
+- **Top-1 True Relevant Item**: The closest item to the query in the original dataset.
+- **Top k Retrieved Items**: The first k items retrieved from the compressed dataset.
+
+Recall@k in this context is a binary metric that indicates whether the single most relevant item (as determined by the closest distance in the original dataset) is retrieved in the top k results from the compressed dataset.
+
+```{r}
+# Function to calculate recall at k for a single relevant item
+calculate_recall_at_k <- function(query, data, compressed_data, true_rankings, retrieved_neighbors, k) {
+  # Calculate the true k nearest neighbors based on the original data
+  true_neighbors <- head(true_rankings, 1)
+
+  # Calculate the intersection of true and retrieved neighbors
+  common_neighbors <- length(intersect(true_neighbors, retrieved_neighbors[1:k]))
+
+  # Recall@k is the proportion of true neighbors that were retrieved
+  recall_at_k <- common_neighbors
+  return(recall_at_k)
+}
+```
+
+```{r}
+distance <- function(x, y) {
+  sqrt(sum((x - y)^2))
+}
+
+# k values
+k_values <- c(1, 4, 8, 16, 32, 64)
+
+average_recalls <- numeric(length(k_values))
+
+# compute recall
+for (idx in seq_along(k_values)) {
+  k <- k_values[idx]
+  recalls_at_k <- sapply(1:100, function(i) {
+    # Compute distances from the query to all points in the original data
+    distances <- apply(data, 1, distance, queries[i, ])
+
+    # Get the ranking of the original points based on their distance to the query
+    true_rankings <- order(distances)
+
+    # Get the top k retrieved neighbors from the compressed data search
+    retrieved_neighbors <- head(nearest_neighbors_list[[i]], k)
+
+    # Calculate recall at k for the current query
+    calculate_recall_at_k(queries[i, ], data, compressed$compressed_data, true_rankings, retrieved_neighbors, k)
+  })
+
+  # Store the average recall at the current k
+  average_recalls[idx] <- mean(recalls_at_k)
+}
+
+# Create a data frame for plotting
+recall_data <- data.frame(k = k_values, Recall = average_recalls)
+
+
+library(ggplot2)
+ggplot(recall_data, aes(x = k, y = Recall)) +
+  geom_point() +
+  geom_line(group = 1, colour = "blue") + 
+  scale_x_continuous(breaks = k_values) + 
+  labs(title = "Recall Curve", x = "k", y = "Average Recall@k") +
+  theme(
+    panel.grid.major = element_blank(), 
+  )
+```
+
+
+In this vignette, we demonstrated the basic usage of `pqCompress` and `pqSearch` functions in the `BA23229020` package for product quantization-based data compression and search.
+
+
+
