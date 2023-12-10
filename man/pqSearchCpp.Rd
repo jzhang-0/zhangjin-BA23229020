@@ -20,5 +20,8 @@ pqSearchCpp(query, compressed_data, centroids)
 这个函数执行基于乘积量化的搜索。
 }
 \examples{
-# 示例代码...
+data <- matrix(rnorm(1000), ncol = 100)
+compressed <- pqCompress(data, 10, 5)
+query <- rnorm(100)
+nearest_neightbors <- pqSearchCpp(query, compressed$compressed_data, compressed$centroids)
 }
