@@ -1,4 +1,6 @@
 #' @name BA23229020-package
+#' @docType package
+#' @keywords package
 #' @title BA23229020: Tools for Product Quantization
 #' @description The BA23229020 package implements methods for efficient product quantization 
 #'   of high-dimensional data. It is designed to facilitate the compression and retrieval 
