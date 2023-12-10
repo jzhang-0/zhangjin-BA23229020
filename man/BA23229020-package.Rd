@@ -3,7 +3,7 @@
 \docType{package}
 \name{BA23229020-package}
 \alias{BA23229020-package}
-\title{BA23229020: Tools for Product Quantization}
+\title{statistical calculation}
 \description{
 The BA23229020 package implements methods for efficient product quantization 
   of high-dimensional data. It is designed to facilitate the compression and retrieval 
@@ -28,7 +28,7 @@ The main functions of the package include:
  
 The package can be installed from a source package or directly from the repository using:
 \preformatted{
-devtools::install_github("username/BA23229020")
+devtools::install_github("jzhang-0/zhangjin-BA23229020")
 }
 }
 
