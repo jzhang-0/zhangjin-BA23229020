@@ -11,4 +11,8 @@ Meta
 src/*.o
 src/*.so
 src/*.dll
-.DS_Store # macOS Files
+.DS_Store 
+inst/doc
+/doc/
+/Meta/
+.vscode
